@@ -11,7 +11,29 @@
 auto start = std::chrono::high_resolution_clock::now();
 std::vector<int> hand_tlx;
 
-
+std::string checkOrder1 (std::vector<int>& vec)
+{
+    size_t i = vec.size();
+    if (vec.size() < 3)
+    {
+        return "random";
+    }
+    else
+    {
+        if (vec[0] > vec[i-1])
+        {
+            return "descending";
+        }
+        else if (vec[0] > vec[i-1])
+        {
+            return "ascending";
+        }
+        else 
+        {
+            return "random";
+        }
+    }
+}
 
 std::string checkOrder (std::vector<int>& vec)
 {
@@ -42,23 +64,15 @@ std::string checkOrder (std::vector<int>& vec)
     
 }
 
-[[nodiscard]] std::string checkHand (std::vector<int>& vec)
-{
-    if (vec.size() >= 8)
-        return "Hand";
-    else
-        return "No Hand";
-}
-
 [[nodiscard]] std::string detectWave (cv::Mat& image, cv::CascadeClassifier& handCascade) 
 {
     
     std::vector <cv::Rect> hands;
     
-    handCascade.detectMultiScale (image, hands, 1.1, 4, 0, cv::Size(8, 8));
+    handCascade.detectMultiScale (image, hands, 1.1, 3, 0, cv::Size(8, 8));
     bool handPresent = false;
     int tlx = 0;
-    std::string result = "No Hand";
+    std::string result = "none";
     
     if(!hands.empty())
     {
@@ -87,13 +101,18 @@ std::string checkOrder (std::vector<int>& vec)
         if (duration.count() >= 500)
         {
             handPresent = false;
-            std::string& order = checkHand(hand_tlx);
+            std::string& order = checkOrder(hand_tlx);
             std::cout << order << "\n";
             hand_tlx.clear();
-            result = order;
+            if(order == "ascending")
+                result = "stop";
+            if(order == "descending")
+                result = "start";
+            if (order == "random")
+                result = "none";
         }
         else
-            cv::putText(image, "Hand", cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 1);
+            cv::putText(image, "Hand", cv::Point(40, 50), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 1);
     }
     hands.clear();
 
@@ -143,45 +162,26 @@ int main ()
     }
 
     cv::CascadeClassifier handCascade;
-    handCascade.load(R"(d:\C++ Programing\Spy Camera System\Training Cascade Classifier 2\Cascade\cascade.xml)");
+    handCascade.load(R"(cascade.xml)");
 
     cv::Size targetSize (240, 160);
     cv::Mat frame, frame1, gray;
-    bool recording = false, canRecord = false, canStopRecord = false;
+    bool recording = false;
     cv::VideoWriter videoWriter;
     
     while (true)
     {
-        auto current = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current - start);
-        if (duration.count() >= 2000)
-        {
-            if(recording)
-                canStopRecord = true;
-            else
-                canRecord = true;
-        }
-
         cam.read(frame);
         cv::flip(frame, frame, 1);
         cv::resize(frame, frame1, targetSize);
         cv::cvtColor (frame1, gray, cv::COLOR_BGR2GRAY);
         
         std::string& result = detectWave(gray, handCascade);
-        //std::cout << result << "\n";
+        std::cout << result << "\n";
 
-        if (result == "Hand")
+        if (result == "start")
         {
-            if(recording)
-            {
-                if(canStopRecord)
-                {
-                    videoWriter.release();
-                    recording = false;
-                    canStopRecord = false;
-                }
-            }
-            else
+            if(!recording)
             {
                 std::string fileName = getFileName();
                 int frameWidth = cam.get(cv::CAP_PROP_FRAME_WIDTH);
@@ -190,17 +190,20 @@ int main ()
                 if (!videoWriter.isOpened())
                     std::cout << "\n\n\nCould not open Video Writer!\n";
                 else
-                {
-                    recording = true;
-                    canRecord = false;
-                }
+                    recording = true;    
             }
         }
-        if (result == "No Hand")
+        else if (result == "stop")
+        {
+            videoWriter.release();
+            recording = false;
+        }
+        else if (result == "none")
         {
 
         }
-
+        else
+        {}
 
         if (recording)
         {
@@ -215,6 +218,4 @@ int main ()
 
         cv::waitKey(1);
     }
-
-    return 0;
 }
